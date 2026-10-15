@@ -186,6 +186,30 @@ def test_send_email_falls_back_to_plain(config, monkeypatch):
     assert len(sent) == 1
 
 
+def test_send_email_retries_ssl_on_disconnect(config, monkeypatch):
+    sent = []
+    ssl_login_calls = {"count": 0}
+    config.email.smtp_port = 465
+
+    class StubSMTP_SSL:
+        def __init__(self, *a, **kw):
+            pass
+        def login(self, u, p):
+            ssl_login_calls["count"] += 1
+            if ssl_login_calls["count"] == 1:
+                raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+        def sendmail(self, s, r, m):
+            sent.append((s, r, m))
+        def quit(self):
+            pass
+
+    monkeypatch.setattr(smtplib, "SMTP_SSL", StubSMTP_SSL)
+    monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
+    send_email(config, "<html>retry</html>")
+    assert ssl_login_calls["count"] == 2
+    assert len(sent) == 1
+
+
 # ---------------------------------------------------------------------------
 # extract_tex_code_from_tar
 # ---------------------------------------------------------------------------
