@@ -92,7 +92,7 @@ llm:
     base_url: ${oc.env:OPENAI_API_BASE}
   api_mode: chat_completion # Or response to use the Responses API.
   generation_kwargs:
-    model: gpt-4o-mini
+    model: nvidia/nemotron-3.5-lightning:free
 
 source:
   arxiv:
@@ -103,6 +103,7 @@ executor:
   debug: ${oc.env:DEBUG,null}
   source: ['arxiv']
 ```
+GitHub Actions loads this configuration from the repository variable `CUSTOM_CONFIG`. If that variable is already set, update `llm.generation_kwargs.model` there too; editing `config/custom.yaml` alone will not change the workflow's model.
 Set `source.arxiv.include_cross_list: true` if you want cross-listed papers included.
 >[!NOTE]
 > `${oc.env:XXX,yyy}` means the value of the environment variable `XXX`. If the variable is not set, the default value `yyy` will be used.
