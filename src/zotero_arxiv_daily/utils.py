@@ -155,31 +155,26 @@ def send_email(config:DictConfig, html:str):
     today = datetime.datetime.now().strftime('%Y/%m/%d')
     msg['Subject'] = Header(f'Daily arXiv {today}', 'utf-8').encode()
 
-    def _build_server(mode: str):
-        if mode == "starttls":
-            server = smtplib.SMTP(smtp_server, smtp_port)
-            server.starttls()
-            return server
-        if mode == "ssl":
-            return smtplib.SMTP_SSL(smtp_server, smtp_port)
-        return smtplib.SMTP(smtp_server, smtp_port)
-
-    modes = ["starttls", "ssl", "plain"]
+    transports = [("ssl", smtp_port)] if smtp_port == 465 else [("starttls", smtp_port)]
     if smtp_port == 465:
-        modes = ["ssl", "starttls", "plain"]
+        transports.append(("starttls", 587))
 
     last_error = None
-    for mode in modes:
+    for mode, port in transports:
         for attempt in range(2):
             server = None
             try:
-                server = _build_server(mode)
+                if mode == "ssl":
+                    server = smtplib.SMTP_SSL(smtp_server, port)
+                else:
+                    server = smtplib.SMTP(smtp_server, port)
+                    server.starttls()
                 server.login(sender, password)
                 server.sendmail(sender, [receiver], msg.as_string())
                 return
             except Exception as e:
                 last_error = e
-                logger.debug(f"Failed to send email using {mode} (attempt {attempt + 1}/2): {e}")
+                logger.debug(f"Failed to send email using {mode} on port {port} (attempt {attempt + 1}/2): {e}")
             finally:
                 if server is not None:
                     try:

@@ -133,80 +133,74 @@ def test_send_email_starttls_success(config, monkeypatch):
     assert "text/html" in body
 
 
-def test_send_email_falls_back_to_ssl(config, monkeypatch):
+def test_send_email_uses_ssl_on_port_465(config, monkeypatch):
     sent = []
-    call_count = {"smtp": 0}
+    config.email.smtp_port = 465
+    monkeypatch.setattr(smtplib, "SMTP_SSL", make_stub_smtp(sent))
 
-    StubOK = make_stub_smtp(sent)
-
-    class StubSMTP_TLS_Fails:
-        def __init__(self, *a, **kw):
-            call_count["smtp"] += 1
-        def starttls(self):
-            raise OSError("TLS not supported")
-
-    class StubSMTP_SSL(StubOK):
-        pass
-
-    monkeypatch.setattr(smtplib, "SMTP", StubSMTP_TLS_Fails)
-    monkeypatch.setattr(smtplib, "SMTP_SSL", StubSMTP_SSL)
     send_email(config, "<html>ssl</html>")
     assert len(sent) == 1
 
 
-def test_send_email_falls_back_to_plain(config, monkeypatch):
+def test_send_email_falls_back_to_starttls_on_port_587(config, monkeypatch):
     sent = []
-    call_count = {"smtp": 0}
+    ssl_ports = []
+    starttls_ports = []
 
-    StubOK = make_stub_smtp(sent)
+    class StubSMTP_SSL:
+        def __init__(self, host, port):
+            ssl_ports.append(port)
+            raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
 
-    class StubSMTP_TLS_Fails:
-        def __init__(self, *a, **kw):
-            call_count["smtp"] += 1
-            if call_count["smtp"] == 1:
-                pass  # first SMTP() call succeeds, but starttls will fail
-            else:
-                pass  # third SMTP() call is the plain fallback
+    class StubSMTP:
+        def __init__(self, host, port):
+            starttls_ports.append(port)
         def starttls(self):
-            raise OSError("TLS not supported")
-        def login(self, u, p):
             pass
-        def sendmail(self, s, r, m):
-            sent.append((s, r, m))
+        def login(self, user, password):
+            pass
+        def sendmail(self, sender, recipients, message):
+            sent.append((sender, recipients, message))
         def quit(self):
             pass
 
-    class StubSMTP_SSL_Fails:
-        def __init__(self, *a, **kw):
-            raise OSError("SSL not supported")
+    config.email.smtp_port = 465
+    monkeypatch.setattr(smtplib, "SMTP_SSL", StubSMTP_SSL)
+    monkeypatch.setattr(smtplib, "SMTP", StubSMTP)
 
-    monkeypatch.setattr(smtplib, "SMTP", StubSMTP_TLS_Fails)
-    monkeypatch.setattr(smtplib, "SMTP_SSL", StubSMTP_SSL_Fails)
-    send_email(config, "<html>plain</html>")
+    send_email(config, "<html>fallback</html>")
+
+    assert ssl_ports == [465, 465]
+    assert starttls_ports == [587]
     assert len(sent) == 1
 
 
-def test_send_email_retries_ssl_on_disconnect(config, monkeypatch):
+def test_send_email_retries_starttls_without_downgrading(config, monkeypatch):
     sent = []
-    ssl_login_calls = {"count": 0}
-    config.email.smtp_port = 465
+    starttls_calls = {"count": 0}
 
-    class StubSMTP_SSL:
+    class StubSMTP:
         def __init__(self, *a, **kw):
             pass
-        def login(self, u, p):
-            ssl_login_calls["count"] += 1
-            if ssl_login_calls["count"] == 1:
+        def starttls(self):
+            starttls_calls["count"] += 1
+            if starttls_calls["count"] == 1:
                 raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+        def login(self, u, p):
+            pass
         def sendmail(self, s, r, m):
             sent.append((s, r, m))
         def quit(self):
             pass
 
+    class StubSMTP_SSL:
+        def __init__(self, *a, **kw):
+            raise AssertionError("STARTTLS failures must not downgrade to SSL")
+
+    monkeypatch.setattr(smtplib, "SMTP", StubSMTP)
     monkeypatch.setattr(smtplib, "SMTP_SSL", StubSMTP_SSL)
-    monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
     send_email(config, "<html>retry</html>")
-    assert ssl_login_calls["count"] == 2
+    assert starttls_calls["count"] == 2
     assert len(sent) == 1
 
 

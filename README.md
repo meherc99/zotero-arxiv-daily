@@ -83,7 +83,7 @@ email:
   sender: ${oc.env:SENDER}
   receiver: ${oc.env:RECEIVER}
   smtp_server: smtp.qq.com
-  smtp_port: 465
+  smtp_port: 587
   sender_password: ${oc.env:SENDER_PASSWORD}
 
 llm:
@@ -129,7 +129,7 @@ email:
   sender: ??? # The email account of the SMTP server that sends you email. Example: abc@qq.com
   receiver: ??? # The email account that receives the paper list. Example: abc@outlook.com
   smtp_server: ??? # The SMTP server that sends the email. Ask your email provider (Gmail, QQ, Outlook, ...) for its SMTP server. Example: smtp.qq.com
-  smtp_port: ??? # The port of SMTP server. Example: 465
+  smtp_port: ??? # Use 465 for implicit SSL or 587 for STARTTLS.
   sender_password: ??? # The password of the sender account. Note that it's not necessarily the password for logging in the e-mail client, but the authentication code for SMTP service. Ask your email provider for this. Example: abcdefghijklmn
 
 llm:
